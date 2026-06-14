@@ -4,6 +4,8 @@
 #include <sqlite3.h>
 #include <string>
 #include <iostream>
+#include <fstream>
+#include <sstream>
 #include <stdexcept>
 
 /**
@@ -31,7 +33,8 @@ class DatabaseManager {
                             "concentration REAL,"
                             "units TEXT,"
                             "detection_limit REAL,"
-                            "result_status TEXT);";
+                            "result_status TEXT,"
+                            "description TEXT);";
 
             char* ErrMsg = nullptr;
             // Execute the SQL statement to create the table
@@ -73,6 +76,26 @@ class DatabaseManager {
         ~DatabaseManager() {
             if (db) {
                 sqlite3_close(db);
+            }
+        }
+
+        void executeScriptFile(const std::string& filePath) {
+            std::ifstream file(filePath);
+            if (!file.is_open()) {
+                throw std::runtime_error("Could not open SQL file target: " + filePath);
+            }
+
+            std::stringstream buffer;
+            buffer << file.rdbuf();
+            std::string sqlScript = buffer.str();
+
+            char* zErrMsg = nullptr;
+            // sqlite3_exec evaluates multiple statements separated by semicolons in one go
+            int rc = sqlite3_exec(db, sqlScript.c_str(), nullptr, nullptr, &zErrMsg);
+            if (rc != SQLITE_OK) {
+                std::string err = zErrMsg;
+                sqlite3_free(zErrMsg);
+                throw std::runtime_error("Failed executing SQL script file details: " + err);
             }
         }
 
@@ -151,8 +174,8 @@ class DatabaseManager {
             double detection_limit = 0.05;
 
             // SQL statement for inserting analysis results
-            std::string sql = "INSERT INTO AnalysisResults (session_id, substance_name, concentration, units, detection_limit, result_status) "
-                            "VALUES (1, ?, ?, ?, ?, 'Detected');";
+            std::string sql = "INSERT INTO AnalysisResults (session_id, substance_name, concentration, units, detection_limit, result_status, description) "
+                            "VALUES (1, ?, ?, ?, ?, 'Detected', ?);";
             
             // sqilite3_stmt is a structure used to represent a prepared statement in SQLite. 
             // It is used to execute SQL statements with parameters in a safe and efficient manner.
@@ -174,25 +197,69 @@ class DatabaseManager {
             sqlite3_finalize(stmt);
         }
 
-        // Evaluation Engine Query
+        /**
+         * function: fetchFlaggedViolations
+         * @description:
+         * - Fetches analysis results from the database that exceed a specified concentration threshold and formats them into a report string.
+         * @param threshold: The concentration threshold for flagging violations.
+         * @returns: std::string
+         */
         std::string fetchFlaggedViolations(double threshold) const {
-            std::string sql = "SELECT substance_name, concentration, units FROM AnalysisResults WHERE concentration > ?;";
+            // SQL query to select analysis results that exceed the specified concentration threshold
+            std::string sql = "SELECT substance_name, concentration, units, description, result_status FROM AnalysisResults WHERE concentration > ?;";
+            // Prepare the SQL statement for execution
             sqlite3_stmt* stmt = nullptr;
-            std::string resultBuffer = "";
+            std::string htmlBuffer = "";
 
+            // Check if the SQL statement was prepared successfullys
             if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) == SQLITE_OK) {
+                // Bind the threshold parameter to the prepared statement
                 sqlite3_bind_double(stmt, 1, threshold);
 
+                // Execute the prepared statement and iterate through the results
                 while (sqlite3_step(stmt) == SQLITE_ROW) {
                     std::string name = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
                     double conc = sqlite3_column_double(stmt, 1);
                     std::string units = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+                    
+                    const char* descRaw = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
+                    std::string description = descRaw ? descRaw : "No operational notes provided.";
 
-                    resultBuffer += "[!] VIOLATION: " + name + " | " + std::to_string(conc) + " " + units + "\n";
+                    const char* statusRaw = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4));
+                    std::string status = statusRaw ? statusRaw : "Unknown";
+
+                    // Dynamically route alert badge styling based on recorded telemetry status flags
+                    std::string badgeColor = "#4a4a4a"; 
+                    if (status.find("Critical") != std::string::npos || status.find("Failure") != std::string::npos) {
+                        badgeColor = "#d9534f"; // Vibrant Danger Red
+                    } else if (status.find("Warning") != std::string::npos || status.find("Threshold") != std::string::npos) {
+                        badgeColor = "#f0ad4e"; // Alert Warning Orange
+                    } else if (status.find("Clear") != std::string::npos || status.find("Optimal") != std::string::npos || status.find("Nominal") != std::string::npos) {
+                        badgeColor = "#5cb85c"; // Operational Pass Green
+                    }
+
+                    // Compile elegant, structurally separated HTML tables for native widget layout parsing
+                    htmlBuffer += "<table width='100%' style='margin-bottom: 12px; background-color: #252526; border: 1px solid #3c3c3c; border-radius: 4px;' cellpadding='8' cellspacing='0'>";
+                    htmlBuffer += "  <tr>";
+                    htmlBuffer += "    <td valign='middle'>";
+                    htmlBuffer += "      <span style='background-color: " + badgeColor + "; color: #ffffff; padding: 2px 6px; font-size: 10px; font-weight: bold; border-radius: 3px;'>" + status + "</span>";
+                    htmlBuffer += "      &nbsp;&nbsp;<b style='color: #ffffff; font-size: 13px;'>" + name + "</b>";
+                    htmlBuffer += "    </td>";
+                    htmlBuffer += "    <td align='right' valign='middle' style='color: #00ffaa; font-family: monospace; font-size: 14px; font-weight: bold;'>";
+                    htmlBuffer += "      " + std::to_string(conc) + " <span style='font-size: 10px; color: #888888;'>" + units + "</span>";
+                    htmlBuffer += "    </td>";
+                    htmlBuffer += "  </tr>";
+                    htmlBuffer += "  <tr>";
+                    htmlBuffer += "    <td colspan='2' style='color: #aaaaaa; font-size: 12px; padding-top: 2px; line-height: 1.4;'>";
+                    htmlBuffer += "      " + description;
+                    htmlBuffer += "    </td>";
+                    htmlBuffer += "  </tr>";
+                    htmlBuffer += "</table>";
                 }
             }
+            // Finalize the statement to release resources allocated by SQLite for this statement
             sqlite3_finalize(stmt);
-            return resultBuffer;
+            return htmlBuffer;
         }
 };
 
