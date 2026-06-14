@@ -108,6 +108,11 @@ MainWindow::MainWindow(QWidget* parent)
 
     setCentralWidget(centralWidget);
 
+    searchTimer = new QTimer(this);
+    searchTimer->setSingleShot(true);
+
+    connect(searchTimer, &QTimer::timeout, this, &MainWindow::handleRefreshViolations);
+
     // Connect interactions for buttons and search bar to their respective handlers
     connect(ingestButton, &QPushButton::clicked, this, &MainWindow::handleIngestion);
     connect(refreshButton, &QPushButton::clicked, this, &MainWindow::handleRefreshViolations);
@@ -277,6 +282,8 @@ void MainWindow::handleDocumentation() {
 void MainWindow::handleSearch(const QString& searchTerm) {
     // The search term is accessed directly from the search bar in handleRefreshViolations, so we mark it as unused here to avoid compiler warnings
     Q_UNUSED(searchTerm) 
+    
+    // Debounce rapid input by 300ms to avoid excessive database queries
     // Whenever the search term changes, we refresh the violations display with the new filter
-    handleRefreshViolations();
+    searchTimer->start(300); 
 }

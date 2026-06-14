@@ -9,6 +9,7 @@
 #include <QMenu>
 #include <QAction>
 #include <QLineEdit>
+#include <QTimer>
 #include "DatabaseManager.h"
 
 /**
@@ -40,10 +41,14 @@ class MainWindow : public QMainWindow {
         
         private:
             DatabaseManager dbManager;
+            // Using raw pointers for UI components since Qt's parent-child memory management will handle cleanup
+            // Lightweight 8-bytes pointers to UI elements for direct access within slots
             QPushButton*    ingestButton;
             QPushButton*    refreshButton;
-            QLineEdit*      searchBar;
             QTextEdit*      displayArea;
+            QLineEdit*      searchBar;
+            // Used to debounce search input and prevent excessive database queries during rapid typing in the search bar
+            QTimer*         searchTimer;
 
             // Menu Bar Pointer Targets
             QMenu* fileMenu;
