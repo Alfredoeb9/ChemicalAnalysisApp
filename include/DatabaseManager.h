@@ -204,9 +204,16 @@ class DatabaseManager {
          * @param threshold: The concentration threshold for flagging violations.
          * @returns: std::string
          */
-        std::string fetchFlaggedViolations(double threshold) const {
+        std::string fetchFlaggedViolations(double threshold, const std::string& searchTerm = "") const {
             // SQL query to select analysis results that exceed the specified concentration threshold
-            std::string sql = "SELECT substance_name, concentration, units, description, result_status FROM AnalysisResults WHERE concentration > ?;";
+            std::string sql;
+            bool isSearching = !searchTerm.empty();
+            
+            if (isSearching) {
+                sql = "SELECT substance_name, concentration, units, description, result_status FROM AnalysisResults WHERE concentration > ? AND substance_name LIKE ?;";
+            } else {
+                sql = "SELECT substance_name, concentration, units, description, result_status FROM AnalysisResults WHERE concentration > ?;";
+            }
             // Prepare the SQL statement for execution
             sqlite3_stmt* stmt = nullptr;
             std::string htmlBuffer = "";
@@ -215,6 +222,14 @@ class DatabaseManager {
             if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) == SQLITE_OK) {
                 // Bind the threshold parameter to the prepared statement
                 sqlite3_bind_double(stmt, 1, threshold);
+
+                if (isSearching) {
+                    // Wrap search term in standard SQL wildcards for partial matching in the query
+                    std::string formattedSearch = "%" + searchTerm + "%";
+                    // Bind the formatted search term to the prepared statement for both substance_name and description fields
+                    sqlite3_bind_text(stmt, 2, formattedSearch.c_str(), -1, SQLITE_STATIC);
+                    sqlite3_bind_text(stmt, 3, formattedSearch.c_str(), -1, SQLITE_STATIC);
+                }
 
                 // Execute the prepared statement and iterate through the results
                 while (sqlite3_step(stmt) == SQLITE_ROW) {

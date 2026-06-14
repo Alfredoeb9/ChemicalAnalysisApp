@@ -8,6 +8,7 @@
 #include <QMenuBar>
 #include <QMenu>
 #include <QAction>
+#include <QLineEdit>
 #include "DatabaseManager.h"
 
 /**
@@ -35,12 +36,14 @@ class MainWindow : public QMainWindow {
             void handleSeedDatabase();
             void handleImportData();
             void handleDocumentation();
+            void handleSearch(const QString& query);
         
         private:
             DatabaseManager dbManager;
-            QPushButton* ingestButton;
-            QPushButton* refreshButton;
-            QTextEdit* displayArea;
+            QPushButton*    ingestButton;
+            QPushButton*    refreshButton;
+            QLineEdit*      searchBar;
+            QTextEdit*      displayArea;
 
             // Menu Bar Pointer Targets
             QMenu* fileMenu;

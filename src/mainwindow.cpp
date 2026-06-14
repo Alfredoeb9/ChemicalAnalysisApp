@@ -83,12 +83,37 @@ MainWindow::MainWindow(QWidget* parent)
 
     layout->addWidget(ingestButton);
     layout->addWidget(refreshButton);
+
+    // SLATE-THEMED SEARCH BAR DESIGN
+    searchBar = new QLineEdit(this);
+    searchBar->setPlaceholderText("🔍 Filter telemetry by substance name or description keywords...");
+    searchBar->setStyleSheet(
+        "QLineEdit {"
+        "   background-color: #252526;"
+        "   color: #ffffff;"
+        "   border: 1px solid #2d2d2d;"
+        "   border-radius: 4px;"
+        "   padding: 8px 12px;"
+        "   font-size: 13px;"
+        "   selection-background-color: #007acc;"
+        "}"
+        "QLineEdit:focus {"
+        "   border: 1px solid #007acc;" // Dark IDE-blue accent ring on active focus
+        "   background-color: #1e1e1e;"
+        "}"
+    );
+    // Mount the search bar above the display area for intuitive filtering of results
+    layout->addWidget(searchBar);
     layout->addWidget(displayArea);
 
     setCentralWidget(centralWidget);
 
+    // Connect interactions for buttons and search bar to their respective handlers
     connect(ingestButton, &QPushButton::clicked, this, &MainWindow::handleIngestion);
     connect(refreshButton, &QPushButton::clicked, this, &MainWindow::handleRefreshViolations);
+
+    // CONNECT SEARCH BAR: Triggers instantly whenever text alters
+    connect(searchBar, &QLineEdit::textChanged, this, &MainWindow::handleSearch);
 }
 
 MainWindow::~MainWindow() {
@@ -201,11 +226,12 @@ void MainWindow::handleIngestion() {
 void MainWindow::handleRefreshViolations() {
     displayArea->clear();
     
-    std::string reportHtml = dbManager.fetchFlaggedViolations(0.0); 
+    // Pass the search bar's current input to the query loop
+    std::string reportHtml = dbManager.fetchFlaggedViolations(0.0, searchBar->text().toStdString()); 
+    
     if(reportHtml.empty()) {
-        displayArea->setHtml("<div style='color: #777777; text-align: center; margin-top: 40px; font-size: 14px;'>⚠️ No active analysis logs discovered in current cycle.</div>");
+        displayArea->setHtml("<div style='color: #777777; text-align: center; margin-top: 40px; font-size: 14px;'>⚠️ No matching evaluation metrics found.</div>");
     } else {
-        // Inject a polished document head title before appending the structured rows
         std::string finalHeader = "<div style='color: #888888; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px;'>System Data Stream Monitoring Active</div>";
         displayArea->setHtml(QString::fromStdString(finalHeader + reportHtml));
     }
@@ -246,4 +272,11 @@ void MainWindow::handleDocumentation() {
     // Prevents memory leaks by cleaning itself up
     docBox->setAttribute(Qt::WA_DeleteOnClose);
     docBox->exec();
+}
+
+void MainWindow::handleSearch(const QString& searchTerm) {
+    // The search term is accessed directly from the search bar in handleRefreshViolations, so we mark it as unused here to avoid compiler warnings
+    Q_UNUSED(searchTerm) 
+    // Whenever the search term changes, we refresh the violations display with the new filter
+    handleRefreshViolations();
 }
