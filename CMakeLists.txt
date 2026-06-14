@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(ChemFluidAnalysisQt VERSION 0.1 LANGUAGES CXX)
+project(ChemFluidAnalysisQt VERSION 0.1 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -10,9 +10,17 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets)
 qt_standard_project_setup()
 
 qt_add_executable(ChemFluidAnalysisQt
-    main.cpp
-    mainwindow.cpp
-    mainwindow.h
+    src/main.cpp
+    src/mainwindow.cpp
+    include/mainwindow.h
+    include/DatabaseManager.h
+    third_party/sqlite3/sqlite3.h
+    third_party/sqlite3/sqlite3.c
+)
+
+target_include_directories(ChemFluidAnalysisQt PRIVATE
+    include
+    third_party/sqlite3
 )
 
 target_link_libraries(ChemFluidAnalysisQt PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)
